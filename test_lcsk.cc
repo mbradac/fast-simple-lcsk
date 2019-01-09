@@ -24,6 +24,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <functional>
 
 #include "fast_simple_lcsk/lcsk.h"
 #include "util/lcsk_testing.h"
@@ -46,67 +47,65 @@ const int kK = 3;
 // const double kPerr = -1.0;
 const double kPerr = 0.1;
 
-int test_lcsk(const string &a, const string &b, const int K) {
-  vector<pair<int, int> > lcsk_sparse_slow_recon;
-  vector<pair<int, int> > lcskpp_sparse_slow_recon;
+int test_lcsk(const string &a, const string &b,
+    LcskppParams params,
+    function<vector<pair<int, int>>(string, string)> fake,
+    function<bool(string a, string b, vector<pair<int, int>>)> checker) {
+  vector<pair<int, int>> slow_recon;
   if (!only_run_fast_version) {
-    LcskSparseSlow(a, b, K, &lcsk_sparse_slow_recon);
-    LcskppSparseSlow(a, b, K, &lcskpp_sparse_slow_recon);
+    slow_recon = fake(a, b);
   }
 
-  vector<pair<int, int> > lcsk_sparse_fast_recon;
-  vector<pair<int, int> > lcskpp_sparse_fast_recon;
-  LcsKSparseFast(a, b, K, &lcsk_sparse_fast_recon);
-  LcsKppSparseFast(a, b, K, &lcskpp_sparse_fast_recon);
-
-  printf("lcsk_sparse_slow_len=%d lcsk_sparse_fast_len=%d\n",
-         (int)lcsk_sparse_slow_recon.size(),
-         (int)lcsk_sparse_fast_recon.size());
-  printf("lcskpp_sparse_slow_len=%d lcskpp_sparse_fast_len=%d\n",
-         (int)lcskpp_sparse_slow_recon.size(),
-         (int)lcskpp_sparse_fast_recon.size());
+  auto fast_recon = LcskppSparseFast(a, b, params);
 
   if (!only_run_fast_version) {
-    assert(lcsk_sparse_slow_recon.size() == lcsk_sparse_fast_recon.size());
-    assert(ValidLcsk(a, b, K, lcsk_sparse_slow_recon));
-
-    assert(lcskpp_sparse_slow_recon.size() == lcskpp_sparse_fast_recon.size());
-    assert(ValidLcskpp(a, b, K, lcskpp_sparse_slow_recon));
+    assert(slow_recon.size() == fast_recon.size());
+    assert(checker(a, b, slow_recon));
   }
-  assert(ValidLcsk(a, b, K, lcsk_sparse_fast_recon));
-  assert(ValidLcskpp(a, b, K, lcskpp_sparse_fast_recon));
+  assert(checker(a, b, fast_recon));
 
-  return lcsk_sparse_fast_recon.size();
+  return fast_recon.size();
 }
 
-int run_one_simulation() {
-  pair<string, string> ab;
-  ab.first = generate_string(kStringLen);
-  ab.second = kPerr < 0 ? generate_string(kStringLen)
-                        : generate_similar(ab.first, kPerr);
-  const string &a = ab.first;
-  const string &b = ab.second;
-  return test_lcsk(a, b, kK);
-}
-
-void calculate_distribution(map<int, double> &distr) {
-  distr.clear();
+map<int, double> run_simulations(
+    function<pair<string, string>(void)> generate_strings,
+    LcskppParams params,
+    function<vector<pair<int, int>>(string, string)> fake,
+    function<bool(string a, string b, vector<pair<int, int>>)> checker) {
+  map<int, double> distr;
   for (int i = 0; i < kSimulationRuns; ++i) {
-    distr[run_one_simulation()] += 1.0 / kSimulationRuns;
+    pair<string, string> ab = generate_strings();
+    const string &a = ab.first;
+    const string &b = ab.second;
+    auto res = test_lcsk(a, b, params, fake, checker);
+    distr[res] += 1.0 / kSimulationRuns;
   }
+  return distr;
 }
 
-int main(int argc, char *argv[]) {
+void LcskTest() {
+  printf("LcskTest\n");
   printf("Running tests on %d random pairs ", kSimulationRuns);
   printf("with the following parameters:\n");
   printf("  string length=%d\n", kStringLen);
   printf("  k=%d\n", kK);
   printf("  pErr=%0.2lf\n", kPerr);
+  printf("  lcsk_plus=false\n");
 
-  srand(1603);
-  
-  map<int, double> distr;
-  calculate_distribution(distr);
+  LcskppParams params(kK);
+  params.lcsk_plus = false;
+  auto distr = run_simulations([] () {
+        auto a = generate_string(kStringLen);
+        auto b = generate_similar(a, kPerr);
+        return pair<string, string>(a, b);
+      },
+      params,
+      [] (const string &a, const string &b) {
+        return LcskSparseSlow(a, b, kK);
+      },
+      [] (const string &a, const string &b, const vector<pair<int, int>> &recon) {
+        return ValidLcsk(a, b, kK, recon);
+      });
 
   double sum_prob = 0;
   double e_lcs = 0;
@@ -120,5 +119,80 @@ int main(int argc, char *argv[]) {
   assert(0.99999 <= sum_prob <= 1.00001);
   printf("Expected LCSk++=%0.3lf\n", e_lcs);
   printf("Test PASSED!\n");
+}
+
+void LcskppTest() {
+  printf("LcskppTest\n");
+  printf("Running tests on %d random pairs ", kSimulationRuns);
+  printf("with the following parameters:\n");
+  printf("  string length=%d\n", kStringLen);
+  printf("  k=%d\n", kK);
+  printf("  pErr=%0.2lf\n", kPerr);
+
+  auto distr = run_simulations([] () {
+        auto a = generate_string(kStringLen);
+        auto b = generate_similar(a, kPerr);
+        return pair<string, string>(a, b);
+      },
+      LcskppParams(kK),
+      [] (const string &a, const string &b) {
+        return LcskppSparseSlow(a, b, kK);
+      },
+      [] (const string &a, const string &b, const vector<pair<int, int>> &recon) {
+        return ValidLcskpp(a, b, kK, recon);
+      });
+
+  double sum_prob = 0;
+  double e_lcs = 0;
+
+  for (int i = 0; i <= kStringLen; ++i) {
+    double p = distr[i];
+    sum_prob += p;
+    e_lcs += p * i;
+  }
+
+  assert(0.99999 <= sum_prob <= 1.00001);
+  printf("Expected LCSk++=%0.3lf\n", e_lcs);
+  printf("Test PASSED!\n");
+}
+
+void LcskppReverseTest() {
+  printf("LcskppReverseTest\n");
+  LcskppParams params(kK);
+  params.reverse = true;
+  auto recon = LcskppSparseFast("actgXxxCCCTTxxxXxtaacctxXxxGGAAz",
+                                "yyyactgYYyAAGGyytaacctYyyTTCCCz",
+                                params);
+  decltype(recon) expected =
+      {{0, 3}, {1, 4}, {2, 5}, {3, 6},
+       {7, 29}, {8, 28}, {9, 27}, {10, 26}, {11, 25},
+       {17, 16}, {18, 17}, {19, 18}, {20, 19}, {21, 20}, {22, 21},
+       {27, 13}, {28, 12}, {29, 11}, {30, 10}};
+  assert(recon == expected);
+  printf("Test PASSED!\n");
+}
+
+void LcskppMultistartTest() {
+  printf("LcskppMultistartTest\n");
+  LcskppParams params(kK);
+  params.mode = LcskppParams::Mode::MULTISTART_2D_LOGARITHMIC;
+  auto recon = LcskppSparseFast(
+      "AAAbbbBBBcccAAAdddCCCeeeBBBfffAAA", "AAAbbbBBBcccAAAdddCCC", params);
+  decltype(recon) expected = {{0, 0}, {1, 1}, {2, 2}, {3, 3}, {4, 4}, {5, 5},
+                              {6, 6}, {7, 7}, {8, 8}, {9, 9}, {10, 10},
+                              {11, 11}, {12, 12}, {13, 13}, {14, 14}, {15, 15},
+                              {16, 16}, {17, 17}, {18, 18}, {19, 19}, {20, 20},
+                              {24, 6}, {25, 7}, {26, 8}, {30, 12}, {31, 13},
+                              {32, 14}};
+  assert(recon == expected);
+  printf("Test PASSED!\n");
+}
+
+int main(int argc, char *argv[]) {
+  srand(1603);
+  LcskTest();
+  LcskppTest();
+  LcskppReverseTest();
+  LcskppMultistartTest();
   return 0;
 }

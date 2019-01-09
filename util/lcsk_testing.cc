@@ -26,11 +26,13 @@
 #include "lcsk_testing.h"
 using namespace std;
 
+namespace {
+
 // This function determines the total number of
 // distinct characters in input strings a and b.
 // Outputs are: aid[character] = unique_character_id
 //              alphabet_size = total number of distinct chars
-static void prepare_alphabet(const string &a, const string &b,
+void prepare_alphabet(const string &a, const string &b,
                              vector<char> &aid, int &alphabet_size) {
   aid = vector<char>(256, -1);
   alphabet_size = 0;
@@ -56,7 +58,7 @@ static void prepare_alphabet(const string &a, const string &b,
 // would have to be reimplemented (for example by using
 // non-perfect hashing or suffix arrays) and everything else
 // should work again.
-static void get_matches(const string &a, const string &b, const int k,
+void get_matches(const string &a, const string &b, const int k,
                         vector<pair<int, int> > *matches) {
   assert(matches != NULL);
   matches->clear();
@@ -114,7 +116,7 @@ static void get_matches(const string &a, const string &b, const int k,
   sort(matches->begin(), matches->end());
 }
 
-static void fill_lcsk_reconstruction(const vector<pair<int, int> > &matches,
+void fill_lcsk_reconstruction(const vector<pair<int, int> > &matches,
                                      const int k, const vector<int> &prev_idx,
                                      const int last_idx,
                                      vector<pair<int, int> > *lcsk_recon,
@@ -126,7 +128,7 @@ static void fill_lcsk_reconstruction(const vector<pair<int, int> > &matches,
     int r = matches[i].first + k - 1;
     int c = matches[i].second + k - 1;
 
-    if (prev_idx[i] == -1 || 
+    if (prev_idx[i] == -1 ||
         (matches[prev_idx[i]].first + k <= matches[i].first &&
          matches[prev_idx[i]].second + k <= matches[i].second)) {
       // Taking the entire match ...
@@ -137,13 +139,13 @@ static void fill_lcsk_reconstruction(const vector<pair<int, int> > &matches,
       // ... otherwise it is a continuation (lcskpp only). Only the
       // last character is taken
       assert(lcskpp);
-      
+
       int curr = i;
       int prev = prev_idx[i];
 
       assert(matches[prev].first + 1 == matches[curr].first &&
              matches[prev].second + 1 == matches[curr].second);
-      
+
       lcsk_recon->push_back(make_pair(r, c));
     }
   }
@@ -152,59 +154,59 @@ static void fill_lcsk_reconstruction(const vector<pair<int, int> > &matches,
 }
 
 // Assume matches is sorted by standard pair ordering.
-static void LcskSparseSlow(const vector<pair<int, int> > &matches, const int k,
-                           vector<pair<int, int> > *lcsk_reconstruction,
+vector<pair<int, int>>
+LcskSparseSlow(const vector<pair<int, int>> &matches, const int k,
                            const bool lcskpp) {
+  vector<pair<int, int>> lcsk_reconstruction;
   assert(is_sorted(matches.begin(), matches.end()));
 
-  if (matches.empty()) {
-    lcsk_reconstruction->clear();
-  } else {
-    int n = matches.size();
-    vector<int> dp(n);
-    vector<int> recon(n);
-    int best_idx = 0;
+  int n = matches.size();
+  vector<int> dp(n);
+  vector<int> recon(n);
+  int best_idx = 0;
 
-    for (int i = 0; i < n; ++i) {
-      dp[i] = k;
-      recon[i] = -1;
+  for (int i = 0; i < n; ++i) {
+    dp[i] = k;
+    recon[i] = -1;
 
-      for (int j = i - 1; j >= 0; --j) {
-        if (matches[j].first + k <= matches[i].first &&
-            matches[j].second + k <= matches[i].second) {
-          // 1) Taking the entire match interval and continuing
-          // another match which 'ended'.
-          if (dp[j] + k > dp[i]) {
-            dp[i] = dp[j] + k;
-            recon[i] = j;
-          }
-        }
-
-        if (lcskpp && matches[j].first + 1 == matches[i].first &&
-            matches[j].second + 1 == matches[i].second) {
-          // 2) Continuation
-          if (dp[j] + 1 > dp[i]) {
-            dp[i] = dp[j] + 1;
-            recon[i] = j;
-          }
+    for (int j = i - 1; j >= 0; --j) {
+      if (matches[j].first + k <= matches[i].first &&
+          matches[j].second + k <= matches[i].second) {
+        // 1) Taking the entire match interval and continuing
+        // another match which 'ended'.
+        if (dp[j] + k > dp[i]) {
+          dp[i] = dp[j] + k;
+          recon[i] = j;
         }
       }
 
-      if (dp[i] > dp[best_idx]) {
-        best_idx = i;
+      if (lcskpp && matches[j].first + 1 == matches[i].first &&
+          matches[j].second + 1 == matches[i].second) {
+        // 2) Continuation
+        if (dp[j] + 1 > dp[i]) {
+          dp[i] = dp[j] + 1;
+          recon[i] = j;
+        }
       }
     }
 
-    fill_lcsk_reconstruction(matches, k, recon, best_idx, lcsk_reconstruction, lcskpp);
+    if (dp[i] > dp[best_idx]) {
+      best_idx = i;
+    }
   }
+
+  fill_lcsk_reconstruction(matches, k, recon, best_idx, &lcsk_reconstruction, lcskpp);
+  return lcsk_reconstruction;
 }
 
-void LcskSparseSlow(const string &a, const string &b, const int k,
-                    vector<pair<int, int> > *lcsk_reconstruction,
+}
+
+vector<pair<int, int>>
+LcskSparseSlow(const string &a, const string &b, const int k,
                     const bool lcskpp) {
   vector<pair<int, int> > matches;
   get_matches(a, b, k, &matches);
-  LcskSparseSlow(matches, k, lcsk_reconstruction, lcskpp);
+  return LcskSparseSlow(matches, k, lcskpp);
 }
 
 bool ValidLcsk(const string &a, const string &b, const int k,
@@ -298,14 +300,14 @@ void LcskSlow(const string &a, const string &b, const int K, int *lcsk_length,
 
 
 // Exposed functions
-void LcskSparseSlow(const std::string &a, const std::string &b, const int k,
-                    std::vector<std::pair<int, int> > *lcsk_reconstruction) {
-  LcskSparseSlow(a, b, k, lcsk_reconstruction, false);
+std::vector<std::pair<int, int>>
+LcskSparseSlow(const std::string &a, const std::string &b, const int k) {
+  return LcskSparseSlow(a, b, k, false);
 }
 
-void LcskppSparseSlow(const std::string &a, const std::string &b, const int k,
-                      std::vector<std::pair<int, int> > *lcsk_reconstruction) {
-  LcskSparseSlow(a, b, k, lcsk_reconstruction, true);
+std::vector<std::pair<int, int>>
+LcskppSparseSlow(const std::string &a, const std::string &b, const int k) {
+  return LcskSparseSlow(a, b, k, true);
 }
 
 bool ValidLcsk(const std::string &a, const std::string &b, const int k,
@@ -327,4 +329,3 @@ void LcskppSlow(const std::string &a, const std::string &b, const int K,
                 int *lcsk_length) {
   LcskSlow(a, b, K, lcsk_length, true);
 }
-

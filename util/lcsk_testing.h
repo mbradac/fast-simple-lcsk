@@ -20,24 +20,22 @@
 #include <vector>
 
 // This is a slower sparse LCSk/LCSkpp calculation.
-//
-// If lcsk_reconstruction equals NULL, only the value of the metric is
-// computed, without reconstructing it.
-void LcskSparseSlow(const std::string &a, const std::string &b, const int k,
-                    std::vector<std::pair<int, int> > *lcsk_reconstruction);
-void LcskppSparseSlow(const std::string &a, const std::string &b, const int k,
-                      std::vector<std::pair<int, int> > *lcsk_reconstruction);
+std::vector<std::pair<int, int>>
+LcskSparseSlow(const std::string &a, const std::string &b, int k);
+
+std::vector<std::pair<int, int>>
+LcskppSparseSlow(const std::string &a, const std::string &b, int k);
 
 // This function tests whether LCSk/LCSkpp has been reconstructed successfully.
-bool ValidLcsk(const std::string &a, const std::string &b, const int k,
+bool ValidLcsk(const std::string &a, const std::string &b, int k,
                const std::vector<std::pair<int, int> > &lcsk_recon);
-bool ValidLcskpp(const std::string &a, const std::string &b, const int k,
+bool ValidLcskpp(const std::string &a, const std::string &b, int k,
                  const std::vector<std::pair<int, int> > &lcsk_recon);
 
 // Slow calculation of LCSk, for testing purposes.
-void LcskSlow(const std::string &a, const std::string &b, const int K,
+void LcskSlow(const std::string &a, const std::string &b, int K,
               int *lcsk_length);
-void LcskppSlow(const std::string &a, const std::string &b, const int K,
+void LcskppSlow(const std::string &a, const std::string &b, int K,
                 int *lcsk_length);
 
 #endif

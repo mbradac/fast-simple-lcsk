@@ -19,14 +19,30 @@
 #include <utility>
 #include <vector>
 
-// Given strings a, b and the length k of matching subsequences, this function
-// finds LCSk(a, b).
-void LcsKSparseFast(const std::string &a, const std::string &b, int k,
-                    std::vector<std::pair<int, int>> *lcsk_reconstruction);
+struct LcskppParams {
+  LcskppParams() = default;
+  LcskppParams(int k) : k(k) {}
 
-// Given strings a, b and the minimum length k of matching subsequences, this
-// function finds LCSkpp(a, b).
-void LcsKppSparseFast(const std::string &a, const std::string &b, int k,
-                      std::vector<std::pair<int, int>> *lcsk_reconstruction);
+  enum class Mode {
+    // Single lcsk is run on strings.
+    SINGLESTART,
+    // Multiple lcsks are run.
+    // TODO: write description of multistart modes.
+    MULTISTART_2D_LOGARITHMIC,
+    MULTISTART_2D_AGGRESSIVE,
+  };
+
+  // If true lcsk++ is used, otherwise standard lcsk algorithm.
+  bool lcsk_plus = true;
+  // If true matching is also calculated on reversed string.
+  bool reverse = false;
+  Mode mode = Mode::SINGLESTART;
+  // Minimal length of a match toe considered.
+  int k = 3;
+};
+
+// Find LCSk of strings a and b.
+std::vector<std::pair<int, int>> LcskppSparseFast(
+    const std::string &a, const std::string &b, const LcskppParams &params);
 
 #endif

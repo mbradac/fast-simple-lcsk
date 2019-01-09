@@ -32,10 +32,9 @@ using namespace std;
 
 namespace {
 
-void FillLcskReconstruction(const int k, std::shared_ptr<MatchPair> best,
-                            vector<pair<int, int>>* lcsk_recon) {
-  assert(lcsk_recon != nullptr);
-  lcsk_recon->clear();
+vector<pair<int, int>> FillLcskReconstruction(
+    const int k, std::shared_ptr<MatchPair> best) {
+  std::vector<std::pair<int, int>> lcsk_recon;
 
   for (auto ft = best; ft != nullptr; ft = ft->prev) {
     int r = ft->end_row;
@@ -45,15 +44,16 @@ void FillLcskReconstruction(const int k, std::shared_ptr<MatchPair> best,
         (ft->prev->end_row + k <= ft->end_row &&
          ft->prev->end_col + k <= ft->end_col)) {
       for (int j = 0; j < k; ++j, --r, --c) {
-        lcsk_recon->push_back(make_pair(r, c));
+        lcsk_recon.push_back(make_pair(r, c));
       }
     } else {
       assert(ft->prev->end_row + 1 == ft->end_row &&
              ft->prev->end_col + 1 == ft->end_col);
-      lcsk_recon->push_back(make_pair(r, c));
+      lcsk_recon.push_back(make_pair(r, c));
     }
   }
-  reverse(lcsk_recon->begin(), lcsk_recon->end());
+  reverse(lcsk_recon.begin(), lcsk_recon.end());
+  return lcsk_recon;
 }
 
 bool CompareByCol(const std::shared_ptr<MatchPair>& a,
@@ -187,14 +187,9 @@ void ElementwiseRowQuery(
   }
 }
 
-void LcsKSparseFastImpl(const string& a, const string& b, int k,
-                        vector<pair<int, int>>* lcsk_reconstruction,
-                        const bool lcsk_plus) {
-  lcsk_reconstruction->clear();
-
+vector<pair<int, int>> LcskppSparseFastRealImpl(
+    int k, int lcsk_plus, const vector<vector<int>> &matches) {
   MatchEventsQueue events;
-  auto match_maker = MatchMaker::Create(a, b, k, PERFECT_HASH);
-
   vector<std::shared_ptr<MatchPair>> compressed_table;
   compressed_table.emplace_back(std::make_shared<MatchPair>(-1, -1, 0, nullptr));
   // following invariants hold:
@@ -202,9 +197,8 @@ void LcsKSparseFastImpl(const string& a, const string& b, int k,
   //    LCSk:   compressed_table[i]->dp == k*i
   vector<std::shared_ptr<MatchPair>> prev_row_match_pairs;
 
-  for (int row = 0; row <= a.size(); ++row) {
-    vector<int> row_matches;
-    match_maker->GetNextMatches(&row_matches);
+  for (int row = 0; row < matches.size(); ++row) {
+    const vector<int> &row_matches = matches[row];
     for (int col : row_matches) {
       events.AddBegin(make_tuple(row, col, nullptr));
     }
@@ -224,7 +218,66 @@ void LcsKSparseFastImpl(const string& a, const string& b, int k,
   }
 
   auto best = compressed_table.back()->end_row != -1 ? compressed_table.back() : nullptr;
-  FillLcskReconstruction(k, best, lcsk_reconstruction);
+  return FillLcskReconstruction(k, best);
+}
+
+vector<pair<int, int>> LcskppSparseFastImpl(const std::string &a,
+                                            const std::string &b,
+                                            int k,
+                                            int lcsk_plus,
+                                            LcskppParams::Mode mode) {
+  auto match_maker = MatchMaker::Create(a, b, k, PERFECT_HASH);
+  vector<vector<int>> rows_matches;
+  vector<pair<int, int>> matches;
+
+  for (int row = 0; row <= a.size(); ++row) {
+    vector<int> row_matches;
+    match_maker->GetNextMatches(&row_matches);
+    rows_matches.push_back(row_matches);
+    for (int col : row_matches) {
+      matches.emplace_back(row, col);
+    }
+  }
+
+  switch (mode) {
+    case LcskppParams::Mode::SINGLESTART: {
+      return LcskppSparseFastRealImpl(k, lcsk_plus, rows_matches);
+    }
+
+    case LcskppParams::Mode::MULTISTART_2D_LOGARITHMIC: {
+      vector<pair<int, int>> recon;
+      while (matches.size()) {
+        auto cm_matches = matches;
+        sort(cm_matches.begin(), cm_matches.end(), [](pair<int, int> a, pair<int, int> b) {
+            if (a.second != b.second) return a.second < b.second;
+            return a.first < b.first;
+        });
+        while (cm_matches.size()) {
+          vector<vector<int>> normalised_matches(a.size() + 1);
+          for (auto match : cm_matches) {
+            normalised_matches[match.first].push_back(match.second);
+          }
+          auto new_recon = LcskppSparseFastRealImpl(k, lcsk_plus, normalised_matches);
+          recon.insert(recon.end(), new_recon.begin(), new_recon.end());
+          vector<pair<int, int>> new_matches(cm_matches.begin() + (cm_matches.size() + 1) / 2,
+                                             cm_matches.end());
+          cm_matches = new_matches;
+        }
+        vector<pair<int, int>> new_matches(matches.begin() + (matches.size() + 1) / 2,
+                                           matches.end());
+        matches = new_matches;
+      }
+      sort(recon.begin(), recon.end());
+      recon.erase(unique(recon.begin(), recon.end()), recon.end());
+      return recon;
+    }
+
+    case LcskppParams::Mode::MULTISTART_2D_AGGRESSIVE: {
+      assert(false);
+      break;
+    }
+  }
+  return {};
 }
 
 }  // namespace
@@ -232,12 +285,21 @@ void LcsKSparseFastImpl(const string& a, const string& b, int k,
 
 // exposed functions
 
-void LcsKSparseFast(const std::string& a, const std::string& b, int k,
-                    std::vector<std::pair<int, int>>* lcsk_reconstruction) {
-  LcsKSparseFastImpl(a, b, k, lcsk_reconstruction, /*lcsk_plus=*/false);
-}
-
-void LcsKppSparseFast(const std::string& a, const std::string& b, int k,
-                        std::vector<std::pair<int, int>>* lcsk_reconstruction) {
-  LcsKSparseFastImpl(a, b, k, lcsk_reconstruction, /*lcsk_plus=*/true);
+vector<pair<int, int>> LcskppSparseFast(
+    const std::string &a, const std::string &b, const LcskppParams &params) {
+  auto recon = LcskppSparseFastImpl(a, b, params.k, params.lcsk_plus, params.mode);
+  if (params.reverse) {
+    auto b_reversed = b;
+    std::reverse(b_reversed.begin(), b_reversed.end());
+    auto recon_reverse = LcskppSparseFastImpl(
+        a, b_reversed, params.k, params.lcsk_plus, params.mode);
+    int b_len = b.size();
+    for (auto &match : recon_reverse) {
+      match.second = b_len - 1 - match.second;
+    }
+    int middle = recon.size();
+    recon.insert(recon.end(), recon_reverse.begin(), recon_reverse.end());
+    inplace_merge(recon.begin(), recon.begin() + middle, recon.end());
+  }
+  return recon;
 }
