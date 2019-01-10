@@ -225,7 +225,8 @@ vector<pair<int, int>> LcskppSparseFastImpl(const std::string &a,
                                             const std::string &b,
                                             int k,
                                             int lcsk_plus,
-                                            LcskppParams::Mode mode) {
+                                            LcskppParams::Mode mode,
+                                            int aggressive_runs) {
   auto match_maker = MatchMaker::Create(a, b, k, PERFECT_HASH);
   vector<vector<int>> rows_matches;
   vector<pair<int, int>> matches;
@@ -239,13 +240,14 @@ vector<pair<int, int>> LcskppSparseFastImpl(const std::string &a,
     }
   }
 
+  vector<pair<int, int>> recon;
   switch (mode) {
     case LcskppParams::Mode::SINGLESTART: {
-      return LcskppSparseFastRealImpl(k, lcsk_plus, rows_matches);
+      recon = LcskppSparseFastRealImpl(k, lcsk_plus, rows_matches);
+      break;
     }
 
     case LcskppParams::Mode::MULTISTART_2D_LOGARITHMIC: {
-      vector<pair<int, int>> recon;
       while (matches.size()) {
         auto cm_matches = matches;
         sort(cm_matches.begin(), cm_matches.end(), [](pair<int, int> a, pair<int, int> b) {
@@ -267,17 +269,36 @@ vector<pair<int, int>> LcskppSparseFastImpl(const std::string &a,
                                            matches.end());
         matches = new_matches;
       }
-      sort(recon.begin(), recon.end());
-      recon.erase(unique(recon.begin(), recon.end()), recon.end());
-      return recon;
+      break;
     }
 
-    case LcskppParams::Mode::MULTISTART_2D_AGGRESSIVE: {
-      assert(false);
+    case LcskppParams::Mode::MULTISTART_AGGRESSIVE: {
+      for (int i = 0; i < aggressive_runs; ++i) {
+        vector<vector<int>> normalised_matches(a.size() + 1);
+        for (auto match : matches) {
+          normalised_matches[match.first].push_back(match.second);
+        }
+        auto new_recon = LcskppSparseFastRealImpl(k, lcsk_plus, normalised_matches);
+        recon.insert(recon.end(), new_recon.begin(), new_recon.end());
+        int j = 0;
+        vector<pair<int, int>> new_matches;
+        for (auto match : matches) {
+          while (j < new_recon.size() && new_recon[j] < match) {
+            ++j;
+          }
+          if (j == new_recon.size() || new_recon[j] != match) {
+            new_matches.push_back(match);
+          }
+        }
+        matches = new_matches;
+      }
       break;
     }
   }
-  return {};
+
+  sort(recon.begin(), recon.end());
+  recon.erase(unique(recon.begin(), recon.end()), recon.end());
+  return recon;
 }
 
 }  // namespace
@@ -287,12 +308,13 @@ vector<pair<int, int>> LcskppSparseFastImpl(const std::string &a,
 
 vector<pair<int, int>> LcskppSparseFast(
     const std::string &a, const std::string &b, const LcskppParams &params) {
-  auto recon = LcskppSparseFastImpl(a, b, params.k, params.lcsk_plus, params.mode);
+  auto recon = LcskppSparseFastImpl(
+      a, b, params.k, params.lcsk_plus, params.mode, params.aggressive_runs);
   if (params.reverse) {
     auto b_reversed = b;
     std::reverse(b_reversed.begin(), b_reversed.end());
     auto recon_reverse = LcskppSparseFastImpl(
-        a, b_reversed, params.k, params.lcsk_plus, params.mode);
+        a, b_reversed, params.k, params.lcsk_plus, params.mode, params.aggressive_runs);
     int b_len = b.size();
     for (auto &match : recon_reverse) {
       match.second = b_len - 1 - match.second;

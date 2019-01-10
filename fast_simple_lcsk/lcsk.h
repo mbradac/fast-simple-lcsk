@@ -29,7 +29,7 @@ struct LcskppParams {
     // Multiple lcsks are run.
     // TODO: write description of multistart modes.
     MULTISTART_2D_LOGARITHMIC,
-    MULTISTART_2D_AGGRESSIVE,
+    MULTISTART_AGGRESSIVE,
   };
 
   // If true lcsk++ is used, otherwise standard lcsk algorithm.
@@ -37,8 +37,10 @@ struct LcskppParams {
   // If true matching is also calculated on reversed string.
   bool reverse = false;
   Mode mode = Mode::SINGLESTART;
-  // Minimal length of a match toe considered.
+  // Minimal length of match to considered.
   int k = 3;
+  // Number of runs in MULTISTART_AGGRESSIVE mode, in other modes ignored.
+  int aggressive_runs = 3;
 };
 
 // Find LCSk of strings a and b.

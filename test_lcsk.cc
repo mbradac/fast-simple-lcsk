@@ -188,11 +188,30 @@ void LcskppMultistartTest() {
   printf("Test PASSED!\n");
 }
 
+void LcskppMultistartAggressiveTest() {
+  printf("LcskppMultistartAggressiveTest\n");
+  LcskppParams params(kK);
+  params.mode = LcskppParams::Mode::MULTISTART_AGGRESSIVE;
+  params.aggressive_runs = 3;
+  auto recon = LcskppSparseFast(
+      "AABBxCCCxxDDDxxEEFFxFFGGFBBB", "AABByDDDyyCCCyyFFGGFEEFFyBBByyAABB", params);
+  decltype(recon) expected = {
+    {0, 0}, {0, 30}, {1, 1}, {1, 31}, {2, 2}, {2, 32}, {3, 3}, {3, 33},
+    {5, 10}, {6, 11}, {7, 12},
+    {10, 5}, {11, 6}, {12, 7},
+    {15, 20}, {16, 21}, {17, 22}, {18, 23},
+    {20, 15}, {21, 16}, {22, 17}, {23, 18}, {24, 19},
+    {25, 25}, {26, 26}, {27, 27}};
+  assert(recon == expected);
+  printf("Test PASSED!\n");
+}
+
 int main(int argc, char *argv[]) {
   srand(1603);
   LcskTest();
   LcskppTest();
   LcskppReverseTest();
   LcskppMultistartTest();
+  LcskppMultistartAggressiveTest();
   return 0;
 }

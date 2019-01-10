@@ -28,13 +28,15 @@ const string kModeLcskpp = "LCSKPP";
 void print_usage_and_exit() {
   printf(
     "Compute LCSk++ of two plain texts.\n\n"
-    "Usage: ./main k input1 input2 output [--reverse] [--mode MODE]\n"
-    "If reverse flag is used lcsk is run on both normal and reversed string"
+    "Usage: ./main k input1 input2 output [--reverse] [--mode MODE] [--runs RUNS]\n"
+    "If --reverse flag is used lcsk is run on both normal and reversed string"
     "Mode can be either LCSKPP (default), MS (multistart_2dlogarithmic) "
     "or MSA (multistart_aggressive)\n"
+    "In MSA mode you can specify number of runs with --runs flag. In other modes "
+    "that flag is ignored."
     "Unlike most unix programs optional flags should be after mandatory args\n\n"
     "Example: ./main 4 test/tests/test.1.A test/tests/test.1.B out\n"
-    "finds LCS4++ of files `test/tests/test.1.A` and `test/tests/test.1.B`\n"
+    "finds LCSK++ of files `test/tests/test.1.A` and `test/tests/test.1.B`\n"
     "and writes it to `output`\n"
   );
   exit(0);
@@ -73,10 +75,15 @@ int main(int argc, char** argv) {
         } else if (mode == "MS") {
           params.mode = LcskppParams::Mode::MULTISTART_2D_LOGARITHMIC;
         } else if (mode == "MSA") {
-          params.mode = LcskppParams::Mode::MULTISTART_2D_AGGRESSIVE;
+          params.mode = LcskppParams::Mode::MULTISTART_AGGRESSIVE;
         } else {
           print_usage_and_exit();
         }
+      } else if (string(argv[i]) == "--runs") {
+        if (i + 1 == argc) {
+          print_usage_and_exit();
+        }
+        params.aggressive_runs = stoi(argv[++i]);
       } else {
         print_usage_and_exit();
       }
@@ -93,8 +100,12 @@ int main(int argc, char** argv) {
   cout << "Max Alive MatchPairs: " << ObjectCounter<MatchPair>::max_objects_alive << endl;
 
   auto r = freopen(argv[4], "w", stdout);
+  int last_position = -1;
   for (auto& p: recon) {
-    putchar(A[p.first]);
+    if (last_position != p.first) {
+      putchar(A[p.first]);
+      last_position = p.first;
+    }
   }
   return 0;
 }
